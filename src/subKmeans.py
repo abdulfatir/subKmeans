@@ -10,7 +10,7 @@ def sub_kmeans(X, k):
     start_time = time.time()
     n, d = X.shape
     V = random_V(d)
-    m = d / 2
+    m = d // 2
     mu_D = np.mean(X, axis=0, keepdims=True)
     S_D = MM((X - mu_D).T, (X - mu_D))
     mu_is = X[np.random.choice(n, k)]
@@ -39,7 +39,7 @@ def sub_kmeans(X, k):
             points_changed = np.sum(1 - np.equal(C, Cnew).astype(np.uint8))
             if points_changed == 0:
                 assignment_unchanged += 1
-            if assignment_unchanged >= 5:
+            if assignment_unchanged >= 2:
                 break
             print('[i] Itr %d: %d points changed' % (itr, points_changed))
             C = Cnew

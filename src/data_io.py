@@ -119,6 +119,51 @@ def load_dataset(name='seeds'):
             Y = np.array(Y, dtype=np.uint8)
             Y = Y if np.min(Y) == 0 else Y - 1
             return X, Y
+    if name == 'fmnist':
+        with open('../datasets/fmnist_dataset.txt') as ds:
+            lines = ds.readlines()
+            X = []
+            Y = []
+            for line in lines:
+                x = line.strip().split(',')
+                y = x[0]
+                x = x[1:]
+                X.append(x)
+                Y.append(int(float(y)))
+            X = np.array(X, dtype=np.float)
+            Y = np.array(Y, dtype=np.uint8)
+            Y = Y if np.min(Y) == 0 else Y - 1
+            return X, Y
+    if name == 'mnist_large':
+        with open('../datasets/mnist_large_dataset.txt') as ds:
+            lines = ds.readlines()
+            X = []
+            Y = []
+            for line in lines:
+                x = line.strip().split(',')
+                y = x[0]
+                x = x[1:]
+                X.append(x)
+                Y.append(int(float(y)))
+            X = np.array(X, dtype=np.float)
+            Y = np.array(Y, dtype=np.uint8)
+            Y = Y if np.min(Y) == 0 else Y - 1
+            return X, Y
+    if name == 'fmnist_large':
+        with open('../datasets/mnist_large_dataset.txt') as ds:
+            lines = ds.readlines()
+            X = []
+            Y = []
+            for line in lines:
+                x = line.strip().split(',')
+                y = x[0]
+                x = x[1:]
+                X.append(x)
+                Y.append(int(float(y)))
+            X = np.array(X, dtype=np.float)
+            Y = np.array(Y, dtype=np.uint8)
+            Y = Y if np.min(Y) == 0 else Y - 1
+            return X, Y
 
 
 if __name__ == '__main__':
