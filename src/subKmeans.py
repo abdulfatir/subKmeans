@@ -18,6 +18,8 @@ def sub_kmeans(X, k, mode='cpu'):
 def _sub_kmeans_gpu_custom(X, k):
     import skcuda
     import skcuda.linalg as LA
+    import pycuda.driver as cuda
+    import pycuda.autoinit
     import pycuda.gpuarray as gpuarray
     import custom_kernels as CC
     LA.init()
@@ -108,6 +110,8 @@ def _sub_kmeans_gpu_custom(X, k):
 def _sub_kmeans_gpu(X, k):
     import skcuda
     import skcuda.linalg as LA
+    import pycuda.driver as cuda
+    import pycuda.autoinit
     import pycuda.gpuarray as gpuarray
     LA.init()
 
