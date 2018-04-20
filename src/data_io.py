@@ -45,7 +45,7 @@ def load_dataset(name='seeds'):
             Y = np.array(Y, dtype=np.uint8)
             return X, Y
     if name == 'hand':
-        with open('../datasets/handjob_dataset.txt') as ds:
+        with open('../datasets/hand_dataset.txt') as ds:
             lines = ds.readlines()
             X = []
             Y = []

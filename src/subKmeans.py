@@ -102,6 +102,7 @@ def _sub_kmeans_gpu_custom(X, k):
         m = max(1, m)
 
         itr += 1
+    return C_gpu.get(), V_gpu.get(), m
 
 
 def _sub_kmeans_gpu(X, k):
@@ -198,6 +199,7 @@ def _sub_kmeans_gpu(X, k):
         m = max(1, m)
 
         itr += 1
+    return C_gpu.get(), V_gpu.get(), m
 
 
 def _sub_kmeans_cpu(X, k):
