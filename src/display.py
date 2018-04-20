@@ -10,7 +10,8 @@ def log_time(message, time, tabs=1):
 
 
 def assign_markers(Y):
-    markers = ['o', 'v', '^', '<', '>', '8', 's', 'p', '*', 'h', 'H', 'D', 'd', 'P', 'X']
+    markers = ['o', 'v', '^', '<', '>', '8', 's',
+               'p', '*', 'h', 'H', 'D', 'd', 'P', 'X']
     random.shuffle(markers)
     marker_map = {}
     M = []
