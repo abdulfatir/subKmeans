@@ -9,6 +9,195 @@ from display import log_time
 def sub_kmeans(X, k, mode='cpu'):
     if mode == 'cpu':
         return _sub_kmeans_cpu(X, k)
+    elif mode == 'gpu':
+        return _sub_kmeans_gpu(X, k)
+    elif mode == 'gpu_custom':
+        return _sub_kmeans_gpu_custom(X, k)
+
+
+def _sub_kmeans_gpu_custom(X, k):
+    import skcuda
+    import skcuda.linalg as LA
+    import pycuda.gpuarray as gpuarray
+    import custom_kernels as CC
+    LA.init()
+
+    n, d = X.shape
+    V_gpu, QR_time = random_V(d, mode='gpu')
+
+    m = d / 2
+
+    X_gpu = gpuarray.to_gpu(X)
+    mu_D_gpu = CC.column_mean(X_gpu)
+    sub_gpu = skcuda.misc.subtract(X_gpu, mu_D_gpu)
+    sub_gpu_T = LA.transpose(sub_gpu)
+    S_D_gpu = CC.matmul(sub_gpu_T, sub_gpu)
+    mu_is_gpu = gpuarray.to_gpu(X[np.random.choice(n, k)])
+    itr = 1
+    assignment_unchanged = 0
+    C_gpu = None
+
+    while True:
+        Pc_gpu = projection_matrix(d, m, mode='gpu')
+        PcV_gpu = LA.dot(Pc_gpu, V_gpu, transa='T', transb='T')
+        PcVmu_is_gpu = gpuarray.empty((k, m), dtype=np.float32)
+
+        for i in range(k):
+            PcVmu_is_gpu[i] = LA.dot(PcV_gpu, mu_is_gpu[i][:, None]).ravel()
+
+        global_temp = LA.dot(X_gpu, PcV_gpu, transb='T')
+        if itr % 2 == 0:
+            C_old = C_gpu.get()
+        C_gpu = CC.argmin_mu_diff(global_temp, PcVmu_is_gpu)
+        if itr % 2 == 0:
+            Cnew = C_gpu.get()
+            points_changed = np.sum(1 - np.equal(C_old, Cnew).astype(np.uint8))
+            if points_changed == 0:
+                assignment_unchanged += 1
+            if assignment_unchanged >= 2:
+                break
+            print('[i] Itr %d: %d points changed' % (itr, points_changed))
+
+        C = C_gpu.get()
+        counts = {i: 0 for i in range(k)}
+
+        for i in xrange(n):
+            C_id = np.int(C[i])
+            counts[C_id] += 1
+        maxv = np.max(counts.values())
+        storage = np.zeros((k, np.int(maxv), d)).astype(np.float32)
+
+        counter = np.zeros(k, dtype=np.uint32)  # k
+        for i in range(n):
+            C_id = np.int(C[i])
+            storage[C_id, np.int(counter[C_id]), :] = X[i].ravel()
+            counter[C_id] += 1
+
+        storage_gpu = gpuarray.to_gpu(storage)
+
+        mu_is_gpu = CC.sum_axis2(storage_gpu)
+        counter_gpu = gpuarray.to_gpu(counter)[:, None]
+
+        mu_is_gpu = skcuda.misc.divide(
+            mu_is_gpu, counter_gpu.astype(np.float32))
+        S_is_gpu = gpuarray.zeros((k, d, d), dtype=np.float32)  # k,d,d
+
+        for i in range(k):
+            storage_gpu[i] = skcuda.misc.subtract(storage_gpu[i], mu_is_gpu[i])
+            curr_cluster_points = storage_gpu[i,
+                                              :np.int(counter[i]), :]  # |k|,d
+            S_is_gpu[i] = LA.dot(curr_cluster_points,
+                                 curr_cluster_points, transa='T')
+
+        S_is_sum_gpu = S_is_gpu.reshape((k, d * d))
+        S_is_sum_gpu = skcuda.misc.sum(S_is_sum_gpu, axis=0, keepdims=True)
+        S_is_sum_gpu = S_is_sum_gpu.reshape((d, d))
+
+        S_is_diff_gpu = skcuda.misc.subtract(S_is_sum_gpu, S_D_gpu)
+
+        w, V_gpu = sorted_eig(S_is_diff_gpu, mode='gpu')
+
+        maxVal = min(w)
+        m = np.sum([1 for i in w if i / maxVal > 1e-3])
+        m = max(1, m)
+
+        itr += 1
+
+
+def _sub_kmeans_gpu(X, k):
+    import skcuda
+    import skcuda.linalg as LA
+    import pycuda.gpuarray as gpuarray
+    LA.init()
+
+    n, d = X.shape
+    V_gpu = random_V(d, mode='gpu')
+    m = d / 2
+    X_gpu = gpuarray.to_gpu(X)
+    mu_D_gpu = skcuda.misc.mean(X_gpu, axis=0, keepdims=True)
+    sub_gpu = skcuda.misc.subtract(X_gpu, mu_D_gpu)
+    S_D_gpu = LA.dot(sub_gpu, sub_gpu, transa='T')
+    mu_is_gpu = gpuarray.to_gpu(X[np.random.choice(n, k)])
+    itr = 1
+    assignment_unchanged = 0
+    C_gpu = None
+    while True:
+        Pc_gpu = projection_matrix(d, m, mode='gpu')
+        PcV_gpu = LA.dot(Pc_gpu, V_gpu, transa='T', transb='T')
+        PcVmu_is_gpu = gpuarray.empty((k, m), dtype=np.float32)
+
+        for i in range(k):
+            PcVmu_is_gpu[i] = LA.dot(PcV_gpu, mu_is_gpu[i][:, None]).ravel()
+
+        global_temp = LA.dot(X_gpu, PcV_gpu, transb='T')
+        if itr % 2 == 0:
+            C_old = C_gpu.get()
+        X_transformed_gpu = gpuarray.empty(
+            (n, k, m), dtype=np.float32)
+        for i in xrange(n):
+            temp = global_temp[i]
+            X_transformed_gpu[i] = skcuda.misc.subtract(
+                PcVmu_is_gpu, temp)
+
+        X_transformed_squared_gpu = LA.multiply(
+            X_transformed_gpu, X_transformed_gpu)
+        X_transformed_squared_gpu = X_transformed_squared_gpu.reshape(
+            (n * k, m))
+        X_transformed_sum_gpu = skcuda.misc.sum(
+            X_transformed_squared_gpu, axis=-1, keepdims=True)
+        X_transformed_sum_gpu = X_transformed_sum_gpu.reshape((n, k))
+        C_gpu = skcuda.misc.argmin(
+            X_transformed_sum_gpu, axis=1)
+        if itr % 2 == 0:
+            Cnew = C_gpu.get()
+            points_changed = np.sum(1 - np.equal(C_old, Cnew).astype(np.uint8))
+            if points_changed == 0:
+                assignment_unchanged += 1
+            if assignment_unchanged >= 2:
+                break
+            print('[i] Itr %d: %d points changed' % (itr, points_changed))
+        C = C_gpu.get()
+        counts = {i: 0 for i in range(k)}
+        mu_is = np.zeros((k, d)).astype(np.float32)
+        for i in range(n):
+            C_id = np.int(C[i])
+            mu_is[C_id] += X[i]
+            counts[C_id] += 1
+
+        mu_is = np.array([mu_is[i] / counts[i] for i in range(k)])
+        mu_is_gpu = gpuarray.to_gpu(mu_is)
+        S_is_gpu = gpuarray.zeros((k, d, d), dtype=np.float32)
+
+        maxv = np.max(counts.values())
+        storage = np.empty((k, np.int(maxv), d)).astype(np.float32)
+        counter = np.zeros(k, dtype=np.uint32)
+
+        for i in range(n):
+            C_id = np.int(C[i])
+            X_minus_mu_isi = (X[i] - mu_is[C_id])[:, None]
+            storage[C_id, np.int(counter[C_id]), :] = X_minus_mu_isi.ravel()
+            counter[C_id] += 1
+
+        storage_gpu = gpuarray.to_gpu(storage)
+        for i in range(k):
+            curr_cluster_points = storage_gpu[i,
+                                              :np.int(counter[i]), :]
+            S_is_gpu[i] = LA.dot(curr_cluster_points,
+                                 curr_cluster_points, transa='T')
+
+        S_is_sum_gpu = S_is_gpu.reshape((k, d * d))
+        S_is_sum_gpu = skcuda.misc.sum(S_is_sum_gpu, axis=0, keepdims=True)
+        S_is_sum_gpu = S_is_sum_gpu.reshape((d, d))
+
+        S_is_diff_gpu = skcuda.misc.subtract(S_is_sum_gpu, S_D_gpu)
+
+        w, V_gpu = sorted_eig(S_is_diff_gpu, mode='gpu')
+
+        maxVal = min(w)
+        m = np.sum([1 for i in w if i / maxVal > 1e-3])
+        m = max(1, m)
+
+        itr += 1
 
 
 def _sub_kmeans_cpu(X, k):
