@@ -17,13 +17,14 @@ def init():
     mod = SourceModule(cuda_source)
 
 
-def matmul(a_gpu, b_gpu, c_gpu):
+def matmul(a_gpu, b_gpu):
     SHAPE_A = np.array(a_gpu.shape).astype(np.uint32)
     SHAPE_B = np.array(b_gpu.shape).astype(np.uint32)
     SHAPE_A_gpu = cuda.mem_alloc(SHAPE_A.nbytes)
     cuda.memcpy_htod(SHAPE_A_gpu, SHAPE_A)
     SHAPE_B_gpu = cuda.mem_alloc(SHAPE_B.nbytes)
     cuda.memcpy_htod(SHAPE_B_gpu, SHAPE_B)
+    c_gpu = gpuarray.empty((a_gpu.shape[0], b_gpu.shape[1]), np.float32)
     BLOCK_DIMX = 32
     BLOCK_DIMY = 32
     GRID_DIMX = int(np.ceil(SHAPE_B[1] / float(BLOCK_DIMX)))
@@ -31,11 +32,10 @@ def matmul(a_gpu, b_gpu, c_gpu):
     func = mod.get_function("matmul")
     func(a_gpu.gpudata, b_gpu.gpudata, c_gpu.gpudata, SHAPE_A_gpu, SHAPE_B_gpu, block=(
         BLOCK_DIMX, BLOCK_DIMY, 1), grid=(GRID_DIMX, GRID_DIMY, 1))
-    # return c_gpu
+    return c_gpu
 
 
 def column_mean(a_gpu):
-    ss = time.time()
     SHAPE_A = np.array(a_gpu.shape).astype(np.uint32)
     SHAPE_A_gpu = cuda.mem_alloc(SHAPE_A.nbytes)
     cuda.memcpy_htod(SHAPE_A_gpu, SHAPE_A)
@@ -45,12 +45,10 @@ def column_mean(a_gpu):
     GRID_DIMX = int(np.ceil(a_gpu.shape[1] / float(BLOCK_DIMX)))
     func(a_gpu.gpudata, mean_a_gpu.gpudata, SHAPE_A_gpu, block=(
         BLOCK_DIMX, 1, 1), grid=(GRID_DIMX, 1, 1))
-    print('Func:', time.time() - ss)
     return mean_a_gpu
 
 
 def argmin_mu_diff(a_gpu, mu_gpu):
-    ss = time.time()
     SHAPE_A_gpu = gpuarray.to_gpu(np.asarray(
         [a_gpu.shape[0], a_gpu.shape[1]]).astype(np.uint32))
     SHAPE_MU_gpu = gpuarray.to_gpu(np.asarray(
@@ -61,12 +59,10 @@ def argmin_mu_diff(a_gpu, mu_gpu):
     GRID_DIMX = int(np.ceil(a_gpu.shape[0] / float(BLOCK_DIMX)))
     func(a_gpu.gpudata, mu_gpu.gpudata, SHAPE_A_gpu, SHAPE_MU_gpu, C_gpu,
          block=(BLOCK_DIMX, 1, 1), grid=(GRID_DIMX, 1, 1))
-    print('Func:', time.time() - ss)
     return C_gpu
 
 
 def sum_axis2(a_gpu):
-    ss = time.time()
     BLOCK_DIMX = 32
     BLOCK_DIMY = 32
     GRID_DIMX = int(np.ceil(a_gpu.shape[2] / float(BLOCK_DIMX)))
@@ -78,7 +74,6 @@ def sum_axis2(a_gpu):
         (a_gpu.shape[0], a_gpu.shape[2]), dtype=np.float32)
     func(a_gpu.gpudata, SHAPE_A_gpu, sum_gpu.gpudata, block=(BLOCK_DIMX,
                                                              BLOCK_DIMY, 1), grid=(GRID_DIMX, GRID_DIMY, 1))
-    print('Func:', time.time() - ss)
     return sum_gpu
 
 
@@ -88,13 +83,12 @@ def _random_unif_ndarray(*shape):
 
 def _test_matmul():
     print('[*] Testing matmul')
-    a = _random_unif_ndarray(125000, 1980)
+    a = _random_unif_ndarray(15000, 1980)
     b = _random_unif_ndarray(1980, 10500)
     a_gpu = gpuarray.to_gpu(a)
     b_gpu = gpuarray.to_gpu(b)
-    c_cuda = gpuarray.empty((a_gpu.shape[0], b_gpu.shape[1]), np.float32)
     t1 = time.time()
-    matmul(a_gpu, b_gpu, c_cuda)
+    c_cuda = matmul(a_gpu, b_gpu)
     t2 = time.time()
     c_np = np.matmul(a, b)
     t3 = time.time()

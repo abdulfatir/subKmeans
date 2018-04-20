@@ -6,7 +6,12 @@ from matrix_utils import projection_matrix, random_V, sorted_eig
 from display import log_time
 
 
-def sub_kmeans(X, k):
+def sub_kmeans(X, k, mode='cpu'):
+    if mode == 'cpu':
+        return _sub_kmeans_cpu(X, k)
+
+
+def _sub_kmeans_cpu(X, k):
     start_time = time.time()
     n, d = X.shape
     V = random_V(d)
