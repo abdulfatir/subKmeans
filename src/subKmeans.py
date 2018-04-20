@@ -214,7 +214,7 @@ def _sub_kmeans_gpu(X, k):
 def _sub_kmeans_cpu(X, k):
     n, d = X.shape
     V = random_V(d)
-    m = d // 2
+    m = d / 2
     mu_D = np.mean(X, axis=0, keepdims=True)
     S_D = MM((X - mu_D).T, (X - mu_D))
     mu_is = X[np.random.choice(n, k)]
