@@ -3,3 +3,4 @@
 MNI*
 *.pyc
 *.png
+datasets/*.txt
