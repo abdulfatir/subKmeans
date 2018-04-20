@@ -1,6 +1,5 @@
 .DS_Store
 .ipynb_*
 MNI*
-datasets/*
 *.pyc
 *.png
