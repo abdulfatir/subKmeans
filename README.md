@@ -25,6 +25,7 @@ Go to `src/`
 python main.py -d=<dataset_name> -k=<number_of_clusters> -mode=<mode>
 ```
 For help: `python main.py -h`
+
 3 available modes: `cpu`, `gpu`, `gpu_custom`
 
 #### Example Usage
