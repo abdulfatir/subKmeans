@@ -40,8 +40,9 @@ def _sub_kmeans_gpu_custom(X, k):
     itr = 1
     assignment_unchanged = 0
     C_gpu = None
+    MAX_ITER = 100
 
-    while True:
+    while itr < MAX_ITER:
         Pc_gpu = projection_matrix(d, m, mode='gpu')
         PcV_gpu = LA.dot(Pc_gpu, V_gpu, transa='T', transb='T')
         PcVmu_is_gpu = gpuarray.empty((k, m), dtype=np.float32)
@@ -129,7 +130,8 @@ def _sub_kmeans_gpu(X, k):
     itr = 1
     assignment_unchanged = 0
     C_gpu = None
-    while True:
+    MAX_ITER = 100
+    while itr < MAX_ITER:
         Pc_gpu = projection_matrix(d, m, mode='gpu')
         PcV_gpu = LA.dot(Pc_gpu, V_gpu, transa='T', transb='T')
         PcVmu_is_gpu = gpuarray.empty((k, m), dtype=np.float32)
@@ -220,7 +222,6 @@ def _sub_kmeans_cpu(X, k):
     itr = 0
     assignment_unchanged = 0
     while itr < MAX_ITER:
-
         Pc = projection_matrix(d, m)
         PcV = MM(Pc.T, V.T)[None, :, :]  # 1,m,d
         PcVmu_is = MM(PcV, mu_is[:, :, None])  # k,m,1
