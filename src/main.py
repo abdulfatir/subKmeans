@@ -23,6 +23,7 @@ def run(dataset_name='seeds', n_clusters=3, mode='cpu'):
         acc = nmi(Y, C)
         M = assign_markers(C)
         K = assign_colors(Y)
+        print('')
         print('[i] Results')
         print('[*] m: %d' % m)
         print('[*] NMI: %.5f' % acc)

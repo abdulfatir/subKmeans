@@ -23,9 +23,11 @@ def _sub_kmeans_gpu_custom(X, k):
     import pycuda.gpuarray as gpuarray
     import custom_kernels as CC
     LA.init()
+    CC.init()
 
     n, d = X.shape
-    V_gpu, QR_time = random_V(d, mode='gpu')
+    X = X.astype(np.float32)
+    V_gpu = random_V(d, mode='gpu')
 
     m = d / 2
 
@@ -116,6 +118,7 @@ def _sub_kmeans_gpu(X, k):
     LA.init()
 
     n, d = X.shape
+    X = X.astype(np.float32)
     V_gpu = random_V(d, mode='gpu')
     m = d / 2
     X_gpu = gpuarray.to_gpu(X)
@@ -207,7 +210,6 @@ def _sub_kmeans_gpu(X, k):
 
 
 def _sub_kmeans_cpu(X, k):
-    start_time = time.time()
     n, d = X.shape
     V = random_V(d)
     m = d // 2
@@ -217,21 +219,16 @@ def _sub_kmeans_cpu(X, k):
     MAX_ITER = 100
     itr = 0
     assignment_unchanged = 0
-    t1, t2, t3, t4 = [], [], [], []
     while itr < MAX_ITER:
 
         Pc = projection_matrix(d, m)
         PcV = MM(Pc.T, V.T)[None, :, :]  # 1,m,d
         PcVmu_is = MM(PcV, mu_is[:, :, None])  # k,m,1
-        start = time.time()  # n,d,1
         X_trans = MM(PcV.squeeze(0), X.T).T  # n, m
         Mus_trans = PcVmu_is.squeeze(-1)  # k, m
         sq_diff = np.square(X_trans[:, None, :] -
                             Mus_trans[None, :, :])  # n, k, m
         sq_diff = np.sum(sq_diff, axis=-1)
-        end = time.time()
-        t1.append(end - start)
-        start = time.time()
         if itr == 0:
             C = np.argmin(sq_diff, axis=1)
         else:
@@ -250,9 +247,6 @@ def _sub_kmeans_cpu(X, k):
             c_id = C[i]
             mu_is[c_id] += x
             counts[c_id] += 1
-        end = time.time()
-        t2.append(end - start)
-        start = time.time()
         mu_is = np.array([mu_is[i] / counts[i] for i in range(k)])
         C_matrics = {i: [] for i in range(k)}
         for i, x in enumerate(X):
@@ -262,24 +256,11 @@ def _sub_kmeans_cpu(X, k):
         for ki in C_matrics:
             CX_m = np.array(C_matrics[ki]).squeeze()
             S_is[ki] = MM(CX_m.T, CX_m)
-        end = time.time()
-        t3.append(end - start)
-        start = time.time()
         Evals, Evecs = sorted_eig(np.sum(S_is, axis=0) - S_D)
-        end = time.time()
-        t4.append(end - start)
         V = Evecs
         maxVal = min(Evals)
         m = np.sum([1 for i in Evals if i / maxVal > 1e-8])
         m = max(1, m)
 
         itr += 1
-    end_time = time.time()
-    print('[i] Completed!')
-    print('[t] Average Time for Operations')
-    log_time('Find assignments', np.mean(t1))
-    log_time('Find Means', np.mean(t2))
-    log_time('k,d,d Matrices Computation', np.mean(t3))
-    log_time('Eigen Decomposition', np.mean(t4))
-    log_time('Total Time', end_time - start_time, tabs=0)
     return C, V, m
